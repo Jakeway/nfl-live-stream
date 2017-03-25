@@ -1,0 +1,8 @@
+ensime.sbt
+live\ nfl\ data.txt
+target/
+lib/
+project/
+.ensime
+.ensime_cache/
+.idea/
