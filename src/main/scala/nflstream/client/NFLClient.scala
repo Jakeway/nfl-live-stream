@@ -1,24 +1,31 @@
-import io.circe.Json
-import models.{Drive, GameInfo, Play, Update}
-import org.http4s.client.blaze.PooledHttp1Client
-import io.circe.generic.auto._, io.circe.parser._
+package nflstream.client
 
+
+import io.circe.Json
+import io.circe.generic.auto._
+import io.circe.parser._
+import nflstream.models.{Drive, GameInfo, Play, Update}
+import nflstream.UpdateE
+import org.http4s.client.blaze.PooledHttp1Client
 
 import scala.xml.XML
+import scalaz.concurrent.Task
 
 class NFLClient {
 
+
+  private val httpClient = PooledHttp1Client()
   private val nflUpdateURL = "http://www.nfl.com/liveupdate/game-center/%s/%s_gtd.json"
   private val thisWeeksScheduleURL = "http://www.nfl.com/liveupdate/scorestrip/ss.xml"
   private val gameOver = List("F", "FO")
 
 
-  def decodeUpdate(gameUpdate: String): Either[String, Update] = {
+  def decodeUpdate(gameUpdate: String, gameId: String): UpdateE = {
     parse(gameUpdate) match {
       case Left(f) => Left(f.message)
       case Right(json) =>
 
-        val jsonWithRootFieldIgnored = json.cursor.fields.flatMap { fields =>
+        val jsonWithRootFieldIgnored = json.hcursor.fields.flatMap { fields =>
           json.hcursor.downField(fields.head).focus
         }.getOrElse(Json.Null)
 
@@ -28,24 +35,21 @@ class NFLClient {
           .delete.top.getOrElse(Json.Null)
 
         crntdrvRemoved.as[Update] match {
-          case Right(u) => Right(u)
+          case Right(u) => Right(gameId -> u)
           case Left(failure) =>
             Left(failure.message)
         }
     }
   }
 
-  def gameUpdate(gameId: String): Either[String, Update] = {
-    val httpClient = PooledHttp1Client()
+  def gameUpdate(gameId: String): Task[UpdateE] = {
     val nflDataURL = nflUpdateURL.format(gameId, gameId)
     val rawNFLData = httpClient.expect[String](nflDataURL)
-    val parsedNflDataTask = rawNFLData map decodeUpdate
-    val update = parsedNflDataTask.run
-    httpClient.shutdownNow()
-    update
+    val parsedNflDataTask = rawNFLData.map(s => decodeUpdate(s, gameId))
+    parsedNflDataTask
   }
 
-  def findChanges(oldU: Update, newU: Update): List[Play] = {
+  def findChanges(oldU: Update, newU: Update): Seq[Play] = {
 
     val oldLastDriveNum = oldU.drives.keySet.toList.map(_.toInt).max
     val oldLastDrive = oldU.drives(oldLastDriveNum.toString)
@@ -96,11 +100,10 @@ class NFLClient {
   def gameInProgress(info: GameInfo): Boolean = !gameHasntStarted(info) && !gameOver(info)
 
   // get updates for the games currently underway
-  def currentGameUpdates(games: Seq[GameInfo]): Seq[Either[String, Update]] =
-    (games filter gameInProgress).map(game => gameUpdate(game.eid))
+  def currentGameUpdates(games: Seq[GameInfo]): Task[Seq[UpdateE]] =
+    Task.gatherUnordered((games filter gameInProgress).map(g => gameUpdate(g.eid)))
 
-  def weeklyGameInfo: Seq[GameInfo] = {
-    val httpClient = PooledHttp1Client()
+  def weeklyGameInfo: Task[Seq[GameInfo]] = {
     val gamesXML = httpClient.expect[String](thisWeeksScheduleURL)
     val gameInfoTask = gamesXML.map(str => {
       val gameXML = XML.loadString(str)
@@ -114,8 +117,9 @@ class NFLClient {
         quarter <- game \ "@q"
       } yield GameInfo(week, eid.toString, day.toString, time.toString, quarter.toString)
     })
-    val gameInfo = gameInfoTask.run
-    httpClient.shutdownNow()
-    gameInfo
+    gameInfoTask
   }
+
+  def shutdown(): Unit = httpClient.shutdownNow()
+
 }

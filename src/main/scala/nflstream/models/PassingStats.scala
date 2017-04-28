@@ -1,12 +1,12 @@
-package models
+package nflstream.models
 
-case class RushingStats(
+case class PassingStats(
   name: Option[String],
   att: Int,
+  cmp: Int,
   yds: Int,
   tds: Int,
-  lng: Int,
-  lngtd: Int,
+  ints: Int,
   twopta: Int,
   twoptm: Int
 )

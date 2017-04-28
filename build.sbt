@@ -1,9 +1,10 @@
 name := "nfl-live-stream"
 version := "1.0"
-scalaVersion := "2.11.8"
+scalaVersion := "2.12.1"
 
-val http4sVersion = "0.15.0"
+val http4sVersion = "0.15.9"
 val circeVersion = "0.6.1"
+val monixVersion = "2.2.4"
 
 // http4s dependencies
 libraryDependencies ++= Seq(
@@ -19,3 +20,6 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-generic",
   "io.circe" %% "circe-parser"
 ).map(_ % circeVersion)
+
+// Monix
+libraryDependencies += "io.monix" %% "monix" % monixVersion

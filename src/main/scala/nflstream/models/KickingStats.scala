@@ -1,4 +1,4 @@
-package models
+package nflstream.models
 
 case class KickingStats(
   name: Option[String],

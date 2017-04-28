@@ -1,4 +1,4 @@
-package models
+package nflstream.models
 
 case class DefenseStats(
   name: Option[String],
@@ -8,3 +8,4 @@ case class DefenseStats(
   int: Int,
   ffum: Int
 )
+
